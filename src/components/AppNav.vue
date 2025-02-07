@@ -19,7 +19,7 @@
           <v-list-item-title>Sign In</v-list-item-title>
         </v-list-item>
 
-        <v-list-item v-if="authStore.user" @click="authStore.logout">
+        <v-list-item v-if="authStore.user" @click="logout">
           <v-list-item-title>Sign Out</v-list-item-title>
         </v-list-item>
       </v-list>
@@ -40,6 +40,10 @@ const goHome = () => {
 
 const goToSignIn = () => {
   router.push('/auth');
+};
+
+const logout = async () => {
+  await authStore.logout(router);  // Pass router to logout method
 };
 </script>
 
