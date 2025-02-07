@@ -1,8 +1,8 @@
-import { defineStore } from 'pinia'; // <-- Add this import
+import { defineStore } from 'pinia';
 import { auth, db, storage } from '../../firebaseConfig.js';
 import { getAuth, signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';  // Correct import for Firebase Storage
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
@@ -16,20 +16,9 @@ export const useAuthStore = defineStore('auth', {
             try {
                 const result = await createUserWithEmailAndPassword(auth, email, password);
                 this.setUser(result.user);
-                await this.createUserInFirestore(result.user); // Create user data in Firestore
+                await this.createUserInFirestore(result.user);
             } catch (error) {
                 console.error('Error signing up:', error);
-                throw error;
-            }
-        },
-
-        async signIn(email, password) {
-            try {
-                const result = await signInWithEmailAndPassword(auth, email, password);
-                this.setUser(result.user);
-                await this.checkUserSetup(result.user);
-            } catch (error) {
-                console.error('Error signing in:', error);
                 throw error;
             }
         },
@@ -40,7 +29,7 @@ export const useAuthStore = defineStore('auth', {
                 const result = await signInWithPopup(auth, provider);
                 this.setUser(result.user);
                 await this.createUserInFirestore(result.user);
-                await this.checkUserSetup(result.user, router);  // Pass the router here
+                await this.checkUserSetup(result.user, router); // This will now work
             } catch (error) {
                 console.error('Google Sign-in Error:', error);
                 throw error;
@@ -54,30 +43,79 @@ export const useAuthStore = defineStore('auth', {
             if (!userDoc.exists()) {
                 await setDoc(userRef, {
                     email: user.email,
-                    name: '',  // Default empty values
+                    name: '',
                     avatar: '',
                     createdAt: new Date(),
                 });
             }
         },
 
+        // Define the checkUserSetup function here
         async checkUserSetup(user, router) {
             const userRef = doc(db, 'users', user.uid);
             const userDoc = await getDoc(userRef);
 
-            if (userDoc.exists() && (!userDoc.data().name || !userDoc.data().avatar)) {
-                router.push('/setup');  // Use the passed router to redirect
-            } else {
-                router.push('/');  // Redirect to home if setup is complete
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                if (!userData.name || !userData.avatar) {
+                    // If name or avatar is missing, redirect to setup page
+                    router.push('/setup');
+                } else {
+                    // If setup is complete, proceed to the homepage
+                    router.push('/');
+                }
             }
+        },
+
+        async uploadAvatar(file) {
+            // Define the file path in Firebase Storage (avatars folder)
+            const fileRef = storageRef(storage, 'avatars/' + file.name);
+            const uploadTask = uploadBytesResumable(fileRef, file);
+
+            // Monitor the upload progress
+            return new Promise((resolve, reject) => {
+                uploadTask.on('state_changed',
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        console.log('Upload is ' + progress + '% done');
+                    },
+                    (error) => {
+                        console.error('Error during file upload:', error);
+                        reject(error);  // Reject promise if error occurs
+                    },
+                    async () => {
+                        try {
+                            // Get the download URL once the file has been uploaded
+                            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                            console.log('File available at:', downloadURL);
+                            resolve(downloadURL);  // Resolve promise with download URL
+                        } catch (error) {
+                            reject(error);
+                        }
+                    }
+                );
+            });
         },
 
         async updateUserSetup(userData, router) {
             if (!this.user) return;
 
             const userRef = doc(db, 'users', this.user.uid);
-            await updateDoc(userRef, userData);
-            router.push('/');  // Redirect to home after setup
+
+            // If avatar file is provided, upload it and set the URL
+            let avatarURL = '';
+            if (userData.avatarFile) {
+                avatarURL = await this.uploadAvatar(userData.avatarFile);  // Ensure avatarURL is set before update
+            }
+
+            // Update user data in Firestore
+            await updateDoc(userRef, {
+                name: userData.name,
+                avatar: avatarURL || '',  // Use an empty string if no avatar is set
+            });
+
+            // Redirect to homepage after successful setup
+            router.push('/');
         },
 
         setUser(user) {
@@ -87,27 +125,7 @@ export const useAuthStore = defineStore('auth', {
         async logout(router) {
             await signOut(auth);
             this.user = null;
-            router.push('/auth');  // Redirect to sign-in page after logout
+            router.push('/auth');
         },
-
-        fetchUser(router) {
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    this.setUser(user);
-                    const userRef = doc(db, 'users', user.uid);
-                    const userDoc = await getDoc(userRef);
-
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        this.userProfile = userData;
-
-                        // Redirect to setup if missing name or avatar
-                        if (!userData.name || !userData.avatar) {
-                            router.push('/setup');
-                        }
-                    }
-                }
-            });
-        },
-    }
+    },
 });
