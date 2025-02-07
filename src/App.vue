@@ -1,10 +1,20 @@
-<script setup>
-</script>
-
 <template>
-  <router-view></router-view>
+
+  <v-app id="app">
+    <AppNav />
+
+    <router-view />
+
+    <ModalAuth />
+  </v-app>
+
 </template>
 
-<style scoped>
+<script setup>
+import ModalAuth from '@/components/ModalAuth.vue';
+import AppNav from "@/components/AppNav.vue";
+</script>
+
+<style lang="scss">
 
 </style>
