@@ -1,12 +1,16 @@
 import { defineStore } from 'pinia';
 import { auth, db, storage } from '../../firebaseConfig.js';
-import { getAuth, signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import {
+    getAuth, signInWithPopup, GoogleAuthProvider,
+    createUserWithEmailAndPassword, signInWithEmailAndPassword,
+    signOut, onAuthStateChanged
+} from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';  // Correct import for Firebase Storage
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
-        user: null,
+        user: JSON.parse(localStorage.getItem('user')) || null, // Persist user state
         showSignInModal: false,
         redirectAfterLogin: null,
     }),
@@ -29,7 +33,7 @@ export const useAuthStore = defineStore('auth', {
                 const result = await signInWithPopup(auth, provider);
                 this.setUser(result.user);
                 await this.createUserInFirestore(result.user);
-                await this.checkUserSetup(result.user, router); // This will now work
+                await this.checkUserSetup(result.user, router);
             } catch (error) {
                 console.error('Google Sign-in Error:', error);
                 throw error;
@@ -50,7 +54,6 @@ export const useAuthStore = defineStore('auth', {
             }
         },
 
-        // Define the checkUserSetup function here
         async checkUserSetup(user, router) {
             const userRef = doc(db, 'users', user.uid);
             const userDoc = await getDoc(userRef);
@@ -58,21 +61,17 @@ export const useAuthStore = defineStore('auth', {
             if (userDoc.exists()) {
                 const userData = userDoc.data();
                 if (!userData.name || !userData.avatar) {
-                    // If name or avatar is missing, redirect to setup page
                     router.push('/setup');
                 } else {
-                    // If setup is complete, proceed to the homepage
                     router.push('/');
                 }
             }
         },
 
         async uploadAvatar(file) {
-            // Define the file path in Firebase Storage (avatars folder)
             const fileRef = storageRef(storage, 'avatars/' + file.name);
             const uploadTask = uploadBytesResumable(fileRef, file);
 
-            // Monitor the upload progress
             return new Promise((resolve, reject) => {
                 uploadTask.on('state_changed',
                     (snapshot) => {
@@ -81,14 +80,12 @@ export const useAuthStore = defineStore('auth', {
                     },
                     (error) => {
                         console.error('Error during file upload:', error);
-                        reject(error);  // Reject promise if error occurs
+                        reject(error);
                     },
                     async () => {
                         try {
-                            // Get the download URL once the file has been uploaded
                             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                            console.log('File available at:', downloadURL);
-                            resolve(downloadURL);  // Resolve promise with download URL
+                            resolve(downloadURL);
                         } catch (error) {
                             reject(error);
                         }
@@ -101,31 +98,54 @@ export const useAuthStore = defineStore('auth', {
             if (!this.user) return;
 
             const userRef = doc(db, 'users', this.user.uid);
-
-            // If avatar file is provided, upload it and set the URL
             let avatarURL = '';
+
             if (userData.avatarFile) {
-                avatarURL = await this.uploadAvatar(userData.avatarFile);  // Ensure avatarURL is set before update
+                avatarURL = await this.uploadAvatar(userData.avatarFile);
             }
 
-            // Update user data in Firestore
             await updateDoc(userRef, {
                 name: userData.name,
-                avatar: avatarURL || '',  // Use an empty string if no avatar is set
+                avatar: avatarURL || '',
             });
 
-            // Redirect to homepage after successful setup
-            router.push('/');
+            this.user = { ...this.user, name: userData.name, avatar: avatarURL || '' };
+            localStorage.setItem('user', JSON.stringify(this.user)); // Save updated user info
+
+            setTimeout(() => {
+                router.push('/');
+            }, 1500);
         },
 
         setUser(user) {
             this.user = user;
+            localStorage.setItem('user', JSON.stringify(user)); // Persist user
         },
 
         async logout(router) {
             await signOut(auth);
             this.user = null;
+            localStorage.removeItem('user'); // Clear storage
             router.push('/auth');
         },
-    },
+
+        initAuthListener() {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    const userRef = doc(db, 'users', user.uid);
+                    const userDoc = await getDoc(userRef);
+
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        this.setUser({ uid: user.uid, email: user.email, ...userData });
+                    } else {
+                        this.setUser(user);
+                    }
+                } else {
+                    this.user = null;
+                    localStorage.removeItem('user');
+                }
+            });
+        }
+    }
 });
