@@ -31,8 +31,8 @@ export const useAuthStore = defineStore('auth', {
             const provider = new GoogleAuthProvider();
             try {
                 const result = await signInWithPopup(auth, provider);
-                this.setUser(result.user);
-                await this.createUserInFirestore(result.user);
+                const userData = await this.createUserInFirestore(result.user);
+                this.setUser({ ...result.user, ...userData });  // Merge Google user data with Firestore data
                 await this.checkUserSetup(result.user, router);
             } catch (error) {
                 console.error('Google Sign-in Error:', error);
@@ -51,6 +51,9 @@ export const useAuthStore = defineStore('auth', {
                     avatar: '',
                     createdAt: new Date(),
                 });
+                return { name: '', avatar: '' };  // Return empty fields if creating a new user
+            } else {
+                return userDoc.data();  // Return Firestore user data (including avatar, name)
             }
         },
 
@@ -106,10 +109,11 @@ export const useAuthStore = defineStore('auth', {
 
             await updateDoc(userRef, {
                 name: userData.name,
-                avatar: avatarURL || '',
+                avatar: avatarURL || '', // Send empty string if avatar is not provided
             });
 
             this.user = { ...this.user, name: userData.name, avatar: avatarURL || '' };
+            console.log('Updated user with avatar:', this.user); // Log user data after update
             localStorage.setItem('user', JSON.stringify(this.user)); // Save updated user info
 
             setTimeout(() => {
@@ -119,6 +123,7 @@ export const useAuthStore = defineStore('auth', {
 
         setUser(user) {
             this.user = user;
+            console.log('Saving user to localStorage:', user);  // Debug log
             localStorage.setItem('user', JSON.stringify(user)); // Persist user
         },
 
@@ -137,9 +142,9 @@ export const useAuthStore = defineStore('auth', {
 
                     if (userDoc.exists()) {
                         const userData = userDoc.data();
-                        this.setUser({ uid: user.uid, email: user.email, ...userData });
+                        this.setUser({ ...user, ...userData });  // Merge Google user data with Firestore data
                     } else {
-                        this.setUser(user);
+                        this.setUser(user);  // If Firestore data doesn't exist, use the Google user object
                     }
                 } else {
                     this.user = null;

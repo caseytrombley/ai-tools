@@ -6,24 +6,27 @@
 
     <v-spacer></v-spacer>
 
-    <!-- User Menu -->
-    <v-menu>
+    <!-- User Avatar & Menu -->
+    <v-menu v-if="authStore.user" offset-y>
       <template v-slot:activator="{ props }">
-        <v-btn icon v-bind="props">
-          <v-icon>mdi-dots-vertical</v-icon>
-        </v-btn>
+        <v-avatar v-bind="props" size="40">
+          <img :src="authStore.user.avatar || defaultAvatar" alt="User Avatar">
+        </v-avatar>
       </template>
-
       <v-list>
-        <v-list-item v-if="!authStore.user" @click="goToSignIn">
-          <v-list-item-title>Sign In</v-list-item-title>
+        <v-list-item @click="goToEditProfile">
+          <v-list-item-title>Edit Profile</v-list-item-title>
         </v-list-item>
-
-        <v-list-item v-if="authStore.user" @click="logout">
+        <v-list-item @click="logout">
           <v-list-item-title>Sign Out</v-list-item-title>
         </v-list-item>
       </v-list>
     </v-menu>
+
+    <!-- Sign In Button for Unauthenticated Users -->
+    <v-btn v-if="!authStore.user" @click="goToSignIn" text>
+      Sign In
+    </v-btn>
   </v-app-bar>
 </template>
 
@@ -33,6 +36,7 @@ import { useRouter } from 'vue-router';
 
 const authStore = useAuthStore();
 const router = useRouter();
+const defaultAvatar = '/default-avatar.png'; // Fallback avatar
 
 const goHome = () => {
   router.push('/');
@@ -42,8 +46,12 @@ const goToSignIn = () => {
   router.push('/auth');
 };
 
+const goToEditProfile = () => {
+  router.push('/edit-profile');
+};
+
 const logout = async () => {
-  await authStore.logout(router);  // Pass router to logout method
+  await authStore.logout(router);
 };
 </script>
 

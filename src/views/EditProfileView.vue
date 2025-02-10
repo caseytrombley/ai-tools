@@ -1,22 +1,27 @@
 <template>
   <v-container>
     <v-card class="pa-4" max-width="500">
-      <v-card-title>Complete Your Profile</v-card-title>
+      <v-card-title>Edit Profile</v-card-title>
 
-      <v-form @submit.prevent="submitSetup">
+      <v-form @submit.prevent="saveProfile">
         <v-text-field v-model="name" label="Name" required></v-text-field>
 
+        <v-avatar size="100">
+          <img :src="previewAvatar || authStore.user.avatar || defaultAvatar" alt="Avatar Preview">
+        </v-avatar>
+
         <v-file-input
-            label="Upload Avatar"
+            label="Upload New Avatar"
             accept="image/*"
             @change="handleFileChange"
-            required
         ></v-file-input>
 
         <v-img v-if="croppedImage" :src="croppedImage" class="mt-3" max-height="150"></v-img>
 
         <v-btn color="primary" type="submit" block>Save</v-btn>
       </v-form>
+
+      <v-btn color="secondary" block @click="cancel">Cancel</v-btn>
 
       <!-- Crop Dialog -->
       <v-dialog v-model="cropDialog" max-width="400">
@@ -40,10 +45,10 @@
       <!-- Success Dialog -->
       <v-dialog v-model="successDialog" persistent>
         <v-card>
-          <v-card-title class="headline">Success!</v-card-title>
-          <v-card-text>Your profile has been updated.</v-card-text>
+          <v-card-title>Profile Updated</v-card-title>
+          <v-card-text>Your changes have been saved.</v-card-text>
           <v-card-actions>
-            <v-btn color="primary" @click="successDialog = false">Okay</v-btn>
+            <v-btn color="primary" @click="closeDialog">OK</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
@@ -61,13 +66,15 @@ import { useRouter } from 'vue-router';
 const authStore = useAuthStore();
 const router = useRouter();
 
-const name = ref('');
+const name = ref(authStore.user?.name || '');
 const avatarFile = ref(null);
-const imageSrc = ref(null);
-const cropDialog = ref(false);
-const croppedImage = ref(null);
+const previewAvatar = ref(authStore.user?.avatar || '');
 const successDialog = ref(false);
+const cropDialog = ref(false);
+const imageSrc = ref(null);
+const croppedImage = ref(null);
 const cropper = ref(null);
+const defaultAvatar = '/default-avatar.png';
 
 const handleFileChange = (event) => {
   const file = event.target.files[0];
@@ -86,7 +93,6 @@ const cropImage = () => {
 
   const { canvas } = cropper.value.getResult();
   if (canvas) {
-    // Resize image before converting to Blob
     resizeImage(canvas, 180, 180).then((resizedBlob) => {
       croppedImage.value = URL.createObjectURL(resizedBlob);
       avatarFile.value = resizedBlob;
@@ -96,40 +102,12 @@ const cropImage = () => {
   cropDialog.value = false;
 };
 
-const resizeImage = (canvas, maxWidth, maxHeight) => {
-  return new Promise((resolve) => {
-    const offscreenCanvas = document.createElement('canvas');
-    const ctx = offscreenCanvas.getContext('2d');
-
-    offscreenCanvas.width = maxWidth;
-    offscreenCanvas.height = maxHeight;
-
-    ctx.drawImage(canvas, 0, 0, maxWidth, maxHeight);
-
-    offscreenCanvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.7);
-  });
-};
-
-const submitSetup = async () => {
+const saveProfile = async () => {
   try {
-    const userData = { name: name.value, avatarFile: avatarFile.value };
-    await authStore.updateUserSetup(userData, router);
-
+    await authStore.updateUserSetup({ name: name.value, avatarFile: avatarFile.value }, router);
     successDialog.value = true;
-
-    setTimeout(() => {
-      router.push('/');
-    }, 1500);
   } catch (error) {
-    console.error('Error during setup:', error);
+    console.error('Error updating profile:', error);
   }
 };
-
 </script>
-
-<style>
-.cropper {
-  width: 100%;
-  height: 300px;
-}
-</style>
