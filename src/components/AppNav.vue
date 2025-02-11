@@ -10,8 +10,9 @@
     <v-menu v-if="authStore.user" offset-y>
       <template v-slot:activator="{ props }">
         <v-avatar v-bind="props" size="40">
-          <img :src="authStore.user.avatar || defaultAvatar" alt="User Avatar">
+          <img :src="authStore.user?.avatar || defaultAvatar" alt="User Avatar" class="avatar-img">
         </v-avatar>
+
       </template>
       <v-list>
         <v-list-item @click="goToEditProfile">
@@ -36,7 +37,7 @@ import { useRouter } from 'vue-router';
 
 const authStore = useAuthStore();
 const router = useRouter();
-const defaultAvatar = '/default-avatar.png'; // Fallback avatar
+const defaultAvatar = '/avatar-default.png'; // Fallback avatar from public folder
 
 const goHome = () => {
   router.push('/');
@@ -58,5 +59,11 @@ const logout = async () => {
 <style scoped>
 .cursor-pointer {
   cursor: pointer;
+}
+
+.avatar-img {
+  object-fit: cover; /* Ensure the image fills the avatar container */
+  width: 100%; /* Make sure the image takes up the full width of the avatar */
+  height: 100%; /* Make sure the image takes up the full height of the avatar */
 }
 </style>

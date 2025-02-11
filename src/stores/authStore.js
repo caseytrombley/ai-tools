@@ -13,6 +13,7 @@ export const useAuthStore = defineStore('auth', {
         user: JSON.parse(localStorage.getItem('user')) || null, // Persist user state
         showSignInModal: false,
         redirectAfterLogin: null,
+        avatarDefault: '/avatar-default.png'
     }),
 
     actions: {
@@ -51,9 +52,6 @@ export const useAuthStore = defineStore('auth', {
                     avatar: '',
                     createdAt: new Date(),
                 });
-                return { name: '', avatar: '' };  // Return empty fields if creating a new user
-            } else {
-                return userDoc.data();  // Return Firestore user data (including avatar, name)
             }
         },
 
@@ -72,7 +70,15 @@ export const useAuthStore = defineStore('auth', {
         },
 
         async uploadAvatar(file) {
-            const fileRef = storageRef(storage, 'avatars/' + file.name);
+            if (!this.user) throw new Error('User not logged in');
+
+            // Get Firestore user data to check existing avatar
+            const userRef = doc(db, 'users', this.user.uid);
+            const userDoc = await getDoc(userRef);
+            const previousAvatar = userDoc.exists() ? userDoc.data().avatar : null;
+
+            // Define new file reference
+            const fileRef = storageRef(storage, `avatars/${this.user.uid}_${Date.now()}_${file.name}`);
             const uploadTask = uploadBytesResumable(fileRef, file);
 
             return new Promise((resolve, reject) => {
@@ -88,6 +94,13 @@ export const useAuthStore = defineStore('auth', {
                     async () => {
                         try {
                             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+
+                            // Delete previous avatar if it exists and is not the default avatar
+                            if (previousAvatar && !previousAvatar.includes('/avatar-default.png')) {
+                                const oldFileRef = storageRef(storage, previousAvatar);
+                                await oldFileRef.delete().catch(() => console.warn('Failed to delete old avatar.'));
+                            }
+
                             resolve(downloadURL);
                         } catch (error) {
                             reject(error);
@@ -101,20 +114,21 @@ export const useAuthStore = defineStore('auth', {
             if (!this.user) return;
 
             const userRef = doc(db, 'users', this.user.uid);
-            let avatarURL = '';
+            let avatarURL = this.user.avatar;  // Keep existing avatar by default
 
             if (userData.avatarFile) {
                 avatarURL = await this.uploadAvatar(userData.avatarFile);
+            } else if (this.user.avatar === '/avatar-default.png') {
+                avatarURL = null;  // Prevent saving default avatar to Firestore
             }
 
             await updateDoc(userRef, {
                 name: userData.name,
-                avatar: avatarURL || '', // Send empty string if avatar is not provided
+                ...(avatarURL ? { avatar: avatarURL } : {}),  // Only update avatar if not empty
             });
 
-            this.user = { ...this.user, name: userData.name, avatar: avatarURL || '' };
-            console.log('Updated user with avatar:', this.user); // Log user data after update
-            localStorage.setItem('user', JSON.stringify(this.user)); // Save updated user info
+            this.user = { ...this.user, name: userData.name, avatar: avatarURL };
+            localStorage.setItem('user', JSON.stringify(this.user));
 
             setTimeout(() => {
                 router.push('/');
@@ -142,9 +156,13 @@ export const useAuthStore = defineStore('auth', {
 
                     if (userDoc.exists()) {
                         const userData = userDoc.data();
-                        this.setUser({ ...user, ...userData });  // Merge Google user data with Firestore data
+                        this.setUser({
+                            ...user,
+                            ...userData,
+                            avatar: userData.avatar || '/avatar-default.png'  // Use local default
+                        });
                     } else {
-                        this.setUser(user);  // If Firestore data doesn't exist, use the Google user object
+                        this.setUser({ ...user, avatar: '/avatar-default.png' });
                     }
                 } else {
                     this.user = null;
@@ -152,5 +170,6 @@ export const useAuthStore = defineStore('auth', {
                 }
             });
         }
+
     }
 });
