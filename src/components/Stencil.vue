@@ -1,86 +1,3 @@
-<script>
-import {
-  DraggableElement,
-  DraggableArea,
-  StencilPreview,
-  ResizeEvent,
-} from "vue-advanced-cropper";
-
-export default {
-  components: {
-    StencilPreview,
-    DraggableArea,
-    DraggableElement,
-  },
-  props: {
-    image: {
-      type: Object,
-    },
-    coordinates: {
-      type: Object,
-    },
-    transitions: {
-      type: Object,
-    },
-    stencilCoordinates: {
-      type: Object,
-    },
-  },
-  computed: {
-    style() {
-      const { height, width, left, top } = this.stencilCoordinates;
-      const style = {
-        width: `${width}px`,
-        height: `${height}px`,
-        transform: `translate(${left}px, ${top}px)`,
-      };
-      if (this.transitions && this.transitions.enabled) {
-        style.transition = `${this.transitions.time}ms ${this.transitions.timingFunction}`;
-      }
-      return style;
-    },
-  },
-  methods: {
-    onMove(moveEvent) {
-      this.$emit("move", moveEvent);
-    },
-    onMoveEnd() {
-      this.$emit("move-end");
-    },
-    onResize(dragEvent) {
-      const shift = dragEvent.shift();
-
-      const widthResize = shift.left;
-      const heightResize = -shift.top;
-
-      this.$emit(
-          "resize",
-          new ResizeEvent(
-              {
-                left: widthResize,
-                right: widthResize,
-                top: heightResize,
-                bottom: heightResize,
-              },
-              {
-                compensate: true,
-              }
-          )
-      );
-    },
-    onResizeEnd() {
-      this.$emit("resize-end");
-    },
-    aspectRatios() {
-      return {
-        minimum: 1,
-        maximum: 1,
-      };
-    },
-  },
-};
-</script>
-
 <template>
   <div class="circle-stencil" :style="style">
     <draggable-element
@@ -114,13 +31,78 @@ export default {
   </div>
 </template>
 
-<style lang="scss">
+<script setup>
+import { ref, computed, defineEmits } from 'vue';
+import {
+  DraggableElement,
+  DraggableArea,
+  StencilPreview,
+  ResizeEvent
+} from 'vue-advanced-cropper';
+
+const props = defineProps({
+  image: Object,
+  coordinates: Object,
+  transitions: Object,
+  stencilCoordinates: Object
+});
+
+const emit = defineEmits();
+
+const style = computed(() => {
+  const { height, width, left, top } = props.stencilCoordinates;
+  const style = {
+    width: `${width}px`,
+    height: `${width}px`, // Enforce square aspect ratio
+    transform: `translate(${left}px, ${top}px)`
+  };
+  if (props.transitions && props.transitions.enabled) {
+    style.transition = `${props.transitions.time}ms ${props.transitions.timingFunction}`;
+  }
+  return style;
+});
+
+const onMove = (moveEvent) => {
+  emit('move', moveEvent);
+};
+
+const onMoveEnd = () => {
+  emit('move-end');
+};
+
+const onResize = (dragEvent) => {
+  const shift = dragEvent.shift();
+  const sizeResize = Math.max(shift.left, -shift.top); // Ensure width and height resize equally
+
+  emit(
+      'resize',
+      new ResizeEvent(
+          {
+            left: sizeResize,
+            right: sizeResize,
+            top: sizeResize,
+            bottom: sizeResize
+          },
+          {
+            compensate: true
+          }
+      )
+  );
+};
+
+const onResizeEnd = () => {
+  emit('resize-end');
+};
+</script>
+
+<style scoped lang="scss">
 .circle-stencil {
   border-radius: 50%;
   cursor: move;
   position: absolute;
   border: dashed 2px white;
   box-sizing: border-box;
+
   &__handler {
     position: absolute;
     right: 15%;
@@ -134,6 +116,7 @@ export default {
     justify-content: center;
     transform: translate(50%, -50%);
   }
+
   &__preview {
     border-radius: 50%;
     overflow: hidden;

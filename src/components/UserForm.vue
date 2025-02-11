@@ -41,7 +41,7 @@
               ref="cropper"
               class="cropper"
               :src="imageSrc"
-              :stencil-props="{ aspectRatio: 1 }"
+              :stencil-component="Stencil"
               :style="{ width: '100%', height: '300px', position: 'relative' }"
           />
         </v-card-text>
@@ -59,6 +59,7 @@ import { ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/authStore.js';
 import { Cropper } from 'vue-advanced-cropper';
 import 'vue-advanced-cropper/dist/style.css';
+import Stencil from './Stencil.vue';  // Import the Stencil component
 
 const authStore = useAuthStore();
 
@@ -99,7 +100,6 @@ const handleFileChange = (event) => {
   }
 };
 
-
 const cropImage = () => {
   if (!cropper.value) return;
 
@@ -122,7 +122,6 @@ const cropImage = () => {
   cropDialog.value = false;
 };
 
-
 const resizeImage = (canvas, maxWidth, maxHeight, format) => {
   return new Promise((resolve) => {
     const offscreenCanvas = document.createElement('canvas');
@@ -137,7 +136,6 @@ const resizeImage = (canvas, maxWidth, maxHeight, format) => {
     offscreenCanvas.toBlob((blob) => resolve(blob), format);
   });
 };
-
 
 const submitForm = () => {
   if (!localName.value.trim()) {
