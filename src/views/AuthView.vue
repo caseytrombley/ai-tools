@@ -1,7 +1,7 @@
 <template>
   <div class="d-flex justify-center align-center" style="min-height: 100vh;">
     <v-row justify="center">
-      <v-col cols="12" md="6">
+      <v-col cols="12" sm="6">
         <AuthForm :isModal="false" />
       </v-col>
     </v-row>
