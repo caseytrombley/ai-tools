@@ -1,6 +1,12 @@
 <template>
   <v-container fluid max-width="1200px">
-    <UserForm :name="name" :avatar="authStore.user?.avatar" :isEditMode="true" @submit="saveProfile" @cancel="cancel"/>
+    <UserForm
+        :name="authStore.user?.name || ''"
+        :avatar="authStore.user?.avatar || '/avatar-default.png'"
+        :isEditMode="true"
+        @submit="saveProfile"
+        @cancel="cancel"
+    />
   </v-container>
 </template>
 

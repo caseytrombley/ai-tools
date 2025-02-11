@@ -10,7 +10,7 @@ import { ref as storageRef, listAll, deleteObject, uploadBytesResumable, getDown
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
-        user: JSON.parse(localStorage.getItem('user')) || null, // Persist user state
+        user: JSON.parse(localStorage.getItem('user')) || null,
         showSignInModal: false,
         redirectAfterLogin: null,
         avatarDefault: '/avatar-default.png'
@@ -20,8 +20,8 @@ export const useAuthStore = defineStore('auth', {
         async signUp(email, password) {
             try {
                 const result = await createUserWithEmailAndPassword(auth, email, password);
-                this.setUser(result.user);
                 await this.createUserInFirestore(result.user);
+                await this.fetchUser(result.user.uid);
             } catch (error) {
                 console.error('Error signing up:', error);
                 throw error;
@@ -32,9 +32,9 @@ export const useAuthStore = defineStore('auth', {
             const provider = new GoogleAuthProvider();
             try {
                 const result = await signInWithPopup(auth, provider);
-                const userData = await this.createUserInFirestore(result.user);
-                this.setUser({ ...result.user, ...userData });  // Merge Google user data with Firestore data
-                await this.checkUserSetup(result.user, router);
+                await this.createUserInFirestore(result.user);
+                await this.fetchUser(result.user.uid);
+                await this.checkUserSetup(router);
             } catch (error) {
                 console.error('Google Sign-in Error:', error);
                 throw error;
@@ -55,17 +55,21 @@ export const useAuthStore = defineStore('auth', {
             }
         },
 
-        async checkUserSetup(user, router) {
-            const userRef = doc(db, 'users', user.uid);
+        async fetchUser(uid) {
+            const userRef = doc(db, 'users', uid);
             const userDoc = await getDoc(userRef);
 
             if (userDoc.exists()) {
-                const userData = userDoc.data();
-                if (!userData.name || !userData.avatar) {
-                    router.push('/setup');
-                } else {
-                    router.push('/');
-                }
+                this.setUser({ uid, ...userDoc.data() });
+            }
+        },
+
+        async checkUserSetup(router) {
+            if (!this.user) return;
+            if (!this.user.name || !this.user.avatar) {
+                router.push('/setup');
+            } else {
+                router.push('/');
             }
         },
 
@@ -75,34 +79,26 @@ export const useAuthStore = defineStore('auth', {
             const userUid = this.user.uid;
             const avatarsFolderRef = storageRef(storage, `avatars/`);
 
-            // List all files under the "avatars" folder
             const files = await listAll(avatarsFolderRef);
             const avatarFiles = files.items.filter(item => item.name.startsWith(userUid));
 
-            // Delete all files related to this user
-            const deletePromises = avatarFiles.map(fileRef => {
-                return deleteObject(fileRef)
-                    .catch(err => console.warn(`Failed to delete avatar file: ${fileRef.name}`, err));
-            });
+            await Promise.all(
+                avatarFiles.map(fileRef =>
+                    deleteObject(fileRef).catch(err => console.warn(`Failed to delete ${fileRef.name}`, err))
+                )
+            );
 
-            // Wait for all deletions to complete
-            await Promise.all(deletePromises);
-
-            // Define new file reference
             const fileName = `${userUid}_${Date.now()}.${file.name.split('.').pop()}`;
             const fileRef = storageRef(storage, `avatars/${fileName}`);
             const uploadTask = uploadBytesResumable(fileRef, file);
 
             return new Promise((resolve, reject) => {
-                uploadTask.on('state_changed',
+                uploadTask.on(
+                    'state_changed',
                     (snapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        console.log('Upload is ' + progress + '% done');
+                        console.log(`Upload is ${(snapshot.bytesTransferred / snapshot.totalBytes) * 100}% done`);
                     },
-                    (error) => {
-                        console.error('Error during file upload:', error);
-                        reject(error);
-                    },
+                    reject,
                     async () => {
                         try {
                             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
@@ -119,62 +115,44 @@ export const useAuthStore = defineStore('auth', {
             if (!this.user) return;
 
             const userRef = doc(db, 'users', this.user.uid);
-            let avatarURL = this.user.avatar;  // Keep existing avatar by default
+            let avatarURL = this.user.avatar;
 
             if (userData.avatarFile) {
                 avatarURL = await this.uploadAvatar(userData.avatarFile);
-            } else if (this.user.avatar === '/avatar-default.png') {
-                avatarURL = null;  // Prevent saving default avatar to Firestore
+            } else if (this.user.avatar === this.avatarDefault) {
+                avatarURL = null;
             }
 
             await updateDoc(userRef, {
                 name: userData.name,
-                ...(avatarURL ? { avatar: avatarURL } : {}),  // Only update avatar if not empty
+                ...(avatarURL ? { avatar: avatarURL } : {}),
             });
 
-            this.user = { ...this.user, name: userData.name, avatar: avatarURL };
-            localStorage.setItem('user', JSON.stringify(this.user));
-
-            setTimeout(() => {
-                router.push('/');
-            }, 1500);
+            await this.fetchUser(this.user.uid);
+            setTimeout(() => router.push('/'), 1500);
         },
 
         setUser(user) {
             this.user = user;
-            console.log('Saving user to localStorage:', user);  // Debug log
-            localStorage.setItem('user', JSON.stringify(user)); // Persist user
+            localStorage.setItem('user', JSON.stringify(user));
         },
 
         async logout(router) {
             await signOut(auth);
             this.user = null;
-            localStorage.removeItem('user'); // Clear storage
+            localStorage.removeItem('user');
             router.push('/auth');
         },
 
         initAuthListener() {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    const userRef = doc(db, 'users', user.uid);
-                    const userDoc = await getDoc(userRef);
-
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        this.setUser({
-                            ...user,
-                            ...userData,
-                            avatar: userData.avatar || '/avatar-default.png'  // Use local default
-                        });
-                    } else {
-                        this.setUser({ ...user, avatar: '/avatar-default.png' });
-                    }
+                    await this.fetchUser(user.uid);
                 } else {
                     this.user = null;
                     localStorage.removeItem('user');
                 }
             });
-        }
-
+        },
     }
 });

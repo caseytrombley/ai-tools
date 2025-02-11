@@ -10,7 +10,7 @@
       <!-- User Avatar & Menu -->
       <v-menu v-if="authStore.user" offset-y>
         <template v-slot:activator="{ props }">
-          <v-avatar v-bind="props" size="40" class="mr-3">
+          <v-avatar v-bind="props" size="40">
             <img :src="authStore.user?.avatar || defaultAvatar" alt="User Avatar" class="avatar-img">
           </v-avatar>
 
