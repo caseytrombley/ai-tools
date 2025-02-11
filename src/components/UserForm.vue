@@ -83,6 +83,7 @@ watch(() => props.avatar, (newAvatar) => {
 const handleFileChange = (event) => {
   const file = event.target.files[0];
   if (file) {
+    avatarFile.value = file;  // Store the file in avatarFile
     const reader = new FileReader();
     reader.onload = (e) => {
       imageSrc.value = e.target.result;
@@ -92,21 +93,31 @@ const handleFileChange = (event) => {
   }
 };
 
+
 const cropImage = () => {
   if (!cropper.value) return;
 
   const { canvas } = cropper.value.getResult();
   if (canvas) {
-    resizeImage(canvas, 180, 180).then((resizedBlob) => {
-      croppedImage.value = URL.createObjectURL(resizedBlob);
-      avatarFile.value = resizedBlob;
+    const fileType = avatarFile.value.type;  // Get the original file type (PNG, JPEG, etc.)
+
+    resizeImage(canvas, 180, 180, fileType).then((resizedBlob) => {
+      const fileExtension = fileType.split('/')[1];  // Get file extension (e.g., 'jpeg', 'png', etc.)
+      const fileName = `${authStore.user?.uid}_${Date.now()}.${fileExtension}`;
+
+      // Create a file from the resized Blob
+      const resizedFile = new File([resizedBlob], fileName, { type: fileType });
+
+      croppedImage.value = URL.createObjectURL(resizedFile);
+      avatarFile.value = resizedFile;  // Now retains the correct type (PNG, JPEG, etc.)
     });
   }
 
   cropDialog.value = false;
 };
 
-const resizeImage = (canvas, maxWidth, maxHeight) => {
+
+const resizeImage = (canvas, maxWidth, maxHeight, format) => {
   return new Promise((resolve) => {
     const offscreenCanvas = document.createElement('canvas');
     const ctx = offscreenCanvas.getContext('2d');
@@ -116,9 +127,11 @@ const resizeImage = (canvas, maxWidth, maxHeight) => {
 
     ctx.drawImage(canvas, 0, 0, maxWidth, maxHeight);
 
-    offscreenCanvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.7);
+    // Just use the format provided (PNG, JPEG, etc.) for the output
+    offscreenCanvas.toBlob((blob) => resolve(blob), format);
   });
 };
+
 
 const submitForm = () => {
   if (!localName.value.trim()) {

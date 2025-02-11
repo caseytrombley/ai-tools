@@ -78,7 +78,9 @@ export const useAuthStore = defineStore('auth', {
             const previousAvatar = userDoc.exists() ? userDoc.data().avatar : null;
 
             // Define new file reference
-            const fileRef = storageRef(storage, `avatars/${this.user.uid}_${Date.now()}_${file.name}`);
+            const fileExtension = file.name.split('.').pop(); // Get file extension
+            const fileName = `${this.user.uid}_${Date.now()}.${fileExtension}`; // Format as uid_date
+            const fileRef = storageRef(storage, `avatars/${fileName}`);
             const uploadTask = uploadBytesResumable(fileRef, file);
 
             return new Promise((resolve, reject) => {
@@ -95,13 +97,33 @@ export const useAuthStore = defineStore('auth', {
                         try {
                             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
-                            // Delete previous avatar if it exists and is not the default avatar
-                            if (previousAvatar && !previousAvatar.includes('/avatar-default.png')) {
-                                const oldFileRef = storageRef(storage, previousAvatar);
-                                await oldFileRef.delete().catch(() => console.warn('Failed to delete old avatar.'));
+                            // If there's a previous avatar, delete it from Firebase Storage
+                            if (previousAvatar && previousAvatar !== '/avatar-default.png') {
+                                // Extract the file path from the URL
+                                const previousAvatarPath = previousAvatar.split('firebaseapp.com/')[1];  // Get path after firebaseapp.com
+
+                                // If the path is not found, log and skip delete
+                                if (!previousAvatarPath) {
+                                    console.error('Invalid avatar path, cannot delete previous avatar.');
+                                    return resolve(downloadURL);
+                                }
+
+                                // Create a valid Firebase reference to the old avatar file
+                                const previousAvatarRef = storageRef(storage, previousAvatarPath);
+
+                                // Log for verification
+                                console.log('Deleting previous avatar at path:', previousAvatarPath);
+
+                                // Delete the old avatar file from Firebase Storage
+                                await previousAvatarRef.delete()
+                                    .then(() => console.log('Previous avatar deleted successfully.'))
+                                    .catch((error) => {
+                                        console.error('Failed to delete old avatar:', error);
+                                        // Ignore errors in delete
+                                    });
                             }
 
-                            resolve(downloadURL);
+                            resolve(downloadURL);  // Return the new avatar URL
                         } catch (error) {
                             reject(error);
                         }
