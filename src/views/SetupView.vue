@@ -1,5 +1,5 @@
 <template>
-  <v-container>
+  <v-container fluid max-width="1200px">
     <UserForm :name="name" :avatar="authStore.user?.avatar" :isEditMode="false" @submit="submitSetup"/>
   </v-container>
 </template>

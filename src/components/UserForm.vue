@@ -5,7 +5,7 @@
     <v-form @submit.prevent="submitForm">
       <v-text-field v-model="localName" label="Name" required></v-text-field>
 
-      <v-avatar size="100">
+      <v-avatar rounded="0" size="100" class="ml-2 mb-3">
         <img
             :src="croppedImage || previewAvatar || authStore.user?.avatar || defaultAvatar"
             alt="Avatar Preview"
@@ -15,10 +15,10 @@
 
       <v-file-input label="Upload Avatar" accept="image/*" @change="handleFileChange"></v-file-input>
 
-      <v-btn color="primary" type="submit" block>{{ submitButtonText }}</v-btn>
+      <v-btn color="primary" type="submit" size="large" variant="flat" block>{{ submitButtonText }}</v-btn>
     </v-form>
 
-    <v-btn v-if="isEditMode" color="secondary" block @click="$emit('cancel')">Cancel</v-btn>
+    <v-btn v-if="isEditMode" @click="$emit('cancel')" size="large" variant="flat" class="mt-3" color="secondary" block >Cancel</v-btn>
 
     <!-- Confirmation Dialog -->
     <v-dialog v-model="confirmationDialog" max-width="400">
@@ -37,7 +37,13 @@
       <v-card>
         <v-card-title>Crop Your Avatar</v-card-title>
         <v-card-text>
-          <Cropper ref="cropper" class="cropper" :src="imageSrc" :stencil-props="{ aspectRatio: 1 }"/>
+          <Cropper
+              ref="cropper"
+              class="cropper"
+              :src="imageSrc"
+              :stencil-props="{ aspectRatio: 1 }"
+              :style="{ width: '100%', height: '300px', position: 'relative' }"
+          />
         </v-card-text>
         <v-card-actions>
           <v-btn color="grey" @click="cropDialog = false">Cancel</v-btn>
@@ -160,5 +166,6 @@ const confirmSubmit = () => {
   object-fit: cover;
   width: 100%;
   height: 100%;
+  border-radius: 50%;  /* This will display the image as a circle */
 }
 </style>

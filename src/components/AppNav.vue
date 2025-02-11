@@ -1,33 +1,37 @@
 <template>
   <v-app-bar color="primary" flat class="position-relative">
-    <v-app-bar-title @click="goHome" class="cursor-pointer">
-      Jam-ollama
-    </v-app-bar-title>
+    <v-container fluid max-width="1200px" class="d-flex align-center">
+      <v-app-bar-title @click="goHome" class="cursor-pointer">
+        Jam-ollama
+      </v-app-bar-title>
 
-    <v-spacer></v-spacer>
+      <v-spacer></v-spacer>
 
-    <!-- User Avatar & Menu -->
-    <v-menu v-if="authStore.user" offset-y>
-      <template v-slot:activator="{ props }">
-        <v-avatar v-bind="props" size="40">
-          <img :src="authStore.user?.avatar || defaultAvatar" alt="User Avatar" class="avatar-img">
-        </v-avatar>
+      <!-- User Avatar & Menu -->
+      <v-menu v-if="authStore.user" offset-y>
+        <template v-slot:activator="{ props }">
+          <v-avatar v-bind="props" size="40" class="mr-3">
+            <img :src="authStore.user?.avatar || defaultAvatar" alt="User Avatar" class="avatar-img">
+          </v-avatar>
 
-      </template>
-      <v-list>
-        <v-list-item @click="goToEditProfile">
-          <v-list-item-title>Edit Profile</v-list-item-title>
-        </v-list-item>
-        <v-list-item @click="logout">
-          <v-list-item-title>Sign Out</v-list-item-title>
-        </v-list-item>
-      </v-list>
-    </v-menu>
+        </template>
+        <v-list>
+          <v-list-item @click="goToEditProfile">
+            <v-list-item-title>Edit Profile</v-list-item-title>
+          </v-list-item>
+          <v-list-item @click="logout">
+            <v-list-item-title>Sign Out</v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </v-menu>
 
-    <!-- Sign In Button for Unauthenticated Users -->
-    <v-btn v-if="!authStore.user" @click="goToSignIn" text>
-      Sign In
-    </v-btn>
+      <!-- Sign In Button for Unauthenticated Users -->
+      <v-btn v-if="!authStore.user" @click="goToSignIn" text>
+        Sign In
+      </v-btn>
+
+    </v-container>
+
   </v-app-bar>
 </template>
 
@@ -62,8 +66,8 @@ const logout = async () => {
 }
 
 .avatar-img {
-  object-fit: cover; /* Ensure the image fills the avatar container */
-  width: 100%; /* Make sure the image takes up the full width of the avatar */
-  height: 100%; /* Make sure the image takes up the full height of the avatar */
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
 }
 </style>
