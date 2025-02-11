@@ -6,7 +6,7 @@ import {
     signOut, onAuthStateChanged
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, listAll, deleteObject, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
@@ -72,14 +72,24 @@ export const useAuthStore = defineStore('auth', {
         async uploadAvatar(file) {
             if (!this.user) throw new Error('User not logged in');
 
-            // Get Firestore user data to check existing avatar
-            const userRef = doc(db, 'users', this.user.uid);
-            const userDoc = await getDoc(userRef);
-            const previousAvatar = userDoc.exists() ? userDoc.data().avatar : null;
+            const userUid = this.user.uid;
+            const avatarsFolderRef = storageRef(storage, `avatars/`);
+
+            // List all files under the "avatars" folder
+            const files = await listAll(avatarsFolderRef);
+            const avatarFiles = files.items.filter(item => item.name.startsWith(userUid));
+
+            // Delete all files related to this user
+            const deletePromises = avatarFiles.map(fileRef => {
+                return deleteObject(fileRef)
+                    .catch(err => console.warn(`Failed to delete avatar file: ${fileRef.name}`, err));
+            });
+
+            // Wait for all deletions to complete
+            await Promise.all(deletePromises);
 
             // Define new file reference
-            const fileExtension = file.name.split('.').pop(); // Get file extension
-            const fileName = `${this.user.uid}_${Date.now()}.${fileExtension}`; // Format as uid_date
+            const fileName = `${userUid}_${Date.now()}.${file.name.split('.').pop()}`;
             const fileRef = storageRef(storage, `avatars/${fileName}`);
             const uploadTask = uploadBytesResumable(fileRef, file);
 
@@ -96,34 +106,7 @@ export const useAuthStore = defineStore('auth', {
                     async () => {
                         try {
                             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-
-                            // If there's a previous avatar, delete it from Firebase Storage
-                            if (previousAvatar && previousAvatar !== '/avatar-default.png') {
-                                // Extract the file path from the URL
-                                const previousAvatarPath = previousAvatar.split('firebaseapp.com/')[1];  // Get path after firebaseapp.com
-
-                                // If the path is not found, log and skip delete
-                                if (!previousAvatarPath) {
-                                    console.error('Invalid avatar path, cannot delete previous avatar.');
-                                    return resolve(downloadURL);
-                                }
-
-                                // Create a valid Firebase reference to the old avatar file
-                                const previousAvatarRef = storageRef(storage, previousAvatarPath);
-
-                                // Log for verification
-                                console.log('Deleting previous avatar at path:', previousAvatarPath);
-
-                                // Delete the old avatar file from Firebase Storage
-                                await previousAvatarRef.delete()
-                                    .then(() => console.log('Previous avatar deleted successfully.'))
-                                    .catch((error) => {
-                                        console.error('Failed to delete old avatar:', error);
-                                        // Ignore errors in delete
-                                    });
-                            }
-
-                            resolve(downloadURL);  // Return the new avatar URL
+                            resolve(downloadURL);
                         } catch (error) {
                             reject(error);
                         }
