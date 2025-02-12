@@ -2,29 +2,96 @@ import { defineStore } from 'pinia';
 import { auth, db, storage } from '../../firebaseConfig.js';
 import {
     getAuth, signInWithPopup, GoogleAuthProvider,
-    createUserWithEmailAndPassword, signInWithEmailAndPassword,
+    createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword,
     signOut, onAuthStateChanged
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref as storageRef, listAll, deleteObject, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { useRouter } from 'vue-router';
+
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
         user: JSON.parse(localStorage.getItem('user')) || null,
+        authError: null,
         showSignInModal: false,
         redirectAfterLogin: null,
         avatarDefault: '/avatar-default.png'
     }),
 
     actions: {
-        async signUp(email, password) {
+        // async signUp(email, password) {
+        //     try {
+        //         const result = await createUserWithEmailAndPassword(auth, email, password);
+        //         await this.createUserInFirestore(result.user);
+        //         await this.fetchUser(result.user.uid);
+        //     } catch (error) {
+        //         console.error('Error signing up:', error);
+        //         throw error;
+        //     }
+        // },
+        async signUp(email, password, router) {
+            this.authError = null;
             try {
                 const result = await createUserWithEmailAndPassword(auth, email, password);
+                if (!result?.user) throw new Error('Account creation failed.');
+
                 await this.createUserInFirestore(result.user);
                 await this.fetchUser(result.user.uid);
+                await this.requestEmailVerification(result.user);
+
+                alert('Check your email to verify your account.');
+                await signOut(auth); // Log out to force email verification before login
             } catch (error) {
                 console.error('Error signing up:', error);
-                throw error;
+                if (error.code === 'auth/email-already-in-use') {
+                    this.authError = 'This email is already registered. Try signing in.';
+                } else {
+                    this.authError = error.message;
+                }
+            }
+        },
+
+        async requestEmailVerification(user) {
+            if (!user) return;
+            try {
+                await sendEmailVerification(user);
+                alert('A verification email has been sent.');
+            } catch (error) {
+                console.error('Error sending email verification:', error);
+            }
+        },
+
+        async signIn(email, password, router) {
+            console.log('sign in auth', auth)
+            this.authError = null;
+            try {
+                const result = await signInWithEmailAndPassword(auth, email, password);
+                console.log('result', result)
+
+                if (!result.user.emailVerified) {
+                    this.authError = 'Please verify your email before signing in.';
+                    await signOut(auth);
+                    return;
+                }
+
+                await this.fetchUser(result.user.uid);
+
+                this.setUser({ uid: result.user.uid, email: result.user.email });
+
+                await this.checkUserSetup(router);
+            } catch (error) {
+                console.error('Sign-in error:', error);
+
+                if (error.code === 'auth/wrong-password') {
+                    this.authError = 'Incorrect password. Please try again.';
+                } else if (error.code === 'auth/user-not-found') {
+                    this.authError = 'No account found with this email.';
+                } else if (error.code === 'auth/invalid-credential') {
+                    this.authError = 'No account found with this email.';
+                } else {
+                    this.authError = error.message;
+                }
             }
         },
 
